@@ -1,51 +1,56 @@
-
 name: Build Least Count APK
 
 on:
-  workflow_dispatch:
+workflow_dispatch:
 
 permissions:
-  contents: read
+contents: read
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+build:
+runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
+steps:
+  - name: Checkout source
+    uses: actions/checkout@v4
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
+  - name: Set up JDK 17
+    uses: actions/setup-java@v4
+    with:
+      distribution: temurin
+      java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+  - name: Set up Android SDK
+    uses: android-actions/setup-android@v3
+    with:
+      accept-android-sdk-licenses: 'true'
 
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses
+  - name: Extract project ZIP
+    run: |
+      unzip -q LeastCountAndroid.zip -d extracted
+      echo "ZIP extracted successfully"
+      find extracted -name gradlew -type f
 
-      - name: Install Android SDK packages
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+  - name: Locate Android project
+    run: |
+      GRADLEW=$(find extracted -name gradlew -type f | head -n 1)
+      if [ -z "$GRADLEW" ]; then
+        echo "ERROR: No gradlew found in ZIP"
+        exit 1
+      fi
+      PROJECT_DIR=$(dirname "$GRADLEW")
+      echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+      chmod +x "$GRADLEW"
 
-      - name: Extract Android project
-        run: |
-          unzip -q LeastCountAndroid.zip -d project
-          find project -name settings.gradle.kts -o -name settings.gradle
+  - name: Build debug APK
+    run: |
+      cd "$PROJECT_DIR"
+      ./gradlew --no-daemon assembleDebug
 
-      - name: Build APK
-        run: |
-          cd project
-          PROJECT_DIR=$(find . -name settings.gradle.kts -o -name settings.gradle | head -n 1 | xargs dirname)
-          cd "$PROJECT_DIR"
-          gradle assembleDebug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: LeastCount-debug-apk
-          path: project/**/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+  - name: Upload APK
+    uses: actions/upload-artifact@v4
+    with:
+      name: LeastCount-debug-apk
+      path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
+      if-no-files-found: error
           
